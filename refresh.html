@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="UTF-8">
+		<title>仿安卓下拉刷新</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1,maximum-scale=1,user-scalable=no">
+		<script src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script>
+		<style>
+			* {
+				padding: 0;
+				margin: 0;
+				box-sizing: border-box;
+			}
+			
+			html,
+			body {
+				width: 100%;
+				height: 100%;
+			}
+			
+			#div1 {
+				width: 100%;
+				height: 100%;
+				overflow: scroll;
+			}
+			
+			#div2 {
+				width: 100%;
+				height: 200%;
+			}
+			
+			.page-refresh {
+				position: absolute;
+				left: 50%;
+				margin-left: -20px;
+				top: -46px;
+				width: 40px;
+				height: 40px;
+				background-color: #FFF;
+				border-radius: 50%;
+				box-shadow: 0 1px 6px 0 rgba(0, 0, 0, .2);
+				z-index: 10;
+			}
+			
+			.page-refresh svg {
+				width: 20px;
+				position: absolute;
+				left: 50%;
+				top: 50%;
+				margin-top: -10px;
+				margin-left: -10px;
+				-webkit-transform-origin: 10px 10px;
+			}
+		</style>
+	</head>
+
+	<body>
+		<div class="page-refresh">
+			<svg viewBox="0 0 60 70.1">
+				<g>
+					<circle stroke-dasharray="0 163.36281798666926" cx="30" cy="30" r="26" stroke-width="8" stroke="#ff2e4b" fill="none">
+						<animate attributeName="stroke-dasharray" values="127.0599695451872 163.36281798666926;4.537856055185257 163.36281798666926;127.0599695451872 163.36281798666926" dur="1.3125s" begin="indefinite" repeatCount="indefinite" calcMode="spline" keySplines=".35 0 .25 1; .35 0 .25 1"
+						/>
+						<animateTransform attributeName="transform" values="0 30 30;270 30 30;270 30 30;540 30 30;540 30 30;810 30 30;810 30 30;1080 30 30;1080 30 30" dur="5.25s" type="rotate" begin="indefinite" repeatCount="indefinite" calcMode="spline" keySplines=".35 0 .25 1; .35 0 .25 1; .35 0 .25 1; .35 0 .25 1; .35 0 .25 1; .35 0 .25 1; .35 0 .25 1; .35 0 .25 1"
+						/>
+					</circle>
+					<polygon style="-webkit-transform-origin: 100% 50%;-webkit-transform: scale(0);" fill="#FF2E4B" points="30,70.1 14.7,56.3 30,42.4 " />
+					<animateTransform attributeName="transform" from="0 30 30" to="360 30 30" dur="2.91667s" type="rotate" begin="indefinite" repeatCount="indefinite" />
+				</g>
+			</svg>
+		</div>
+		<div id="div1">
+			<div id="div2">
+				仿安卓下拉刷新；
+				<br /> by:<a href="http://weibo.com/u/1326039884/">折腾笔记（weibo）</a>
+			</div>
+		</div>
+		<script type="text/javascript">
+			var refresh = { //下拉刷新
+				$dom: null,
+				MAXTIME: 8000,
+				tap_touch_y: 0,
+				tap_touch_up: false,
+				refresh_lock: false,
+				swipeY: 0,
+				moveY: 0,
+				page_refresh: null,
+				init: function(scroll) { //初始化-传入滚动区域选择器
+					var refresh = this;
+					refresh.page_refresh = $(".page-refresh");
+					var page_refresh = refresh.page_refresh;
+					refresh.svg = page_refresh.find('svg')
+					refresh.g = page_refresh.find('g')
+					refresh.circle = page_refresh.find('circle')
+					refresh.animate = page_refresh.find('animate')
+					refresh.animateTransform = page_refresh.find('animateTransform')
+					refresh.polygon = page_refresh.find('polygon')
+					$(scroll).on('touchstart', function() {
+						var $this = $(this);
+						var scrollY = $(this).children().css('transform');
+						refresh.$dom = $this;
+						if (scrollY && scrollY !== 'none') {
+							scrollY = scrollY.split(',')[5];
+							scrollY = Number(scrollY.substr(1, scrollY.length - 2));
+						} else {
+							scrollY = $this.scrollTop();
+						}
+						refresh.tap_touch_up = scrollY === 0 ? true : false;
+						if (!refresh.tap_touch_up || refresh.refresh_lock) {
+							return;
+						}
+						refresh.tap_touch_y = event.touches[0].pageY;
+						refresh.swipeY = 0;
+					}).on('touchmove', function() {
+						var pageY;
+						if (!refresh.tap_touch_up || refresh.refresh_lock) {
+							return;
+						}
+						pageY = event.touches[0].pageY;
+						refresh.moveY = (pageY - refresh.tap_touch_y) / 2;
+						if (refresh.swipeY === 0) {
+							refresh.swipeY = refresh.moveY;
+						}
+						if (refresh.swipeY < 0) {
+							refresh.tap_touch_up = false;
+							return;
+						}
+						refresh.move();
+						return false;
+					}).on('touchend', function() {
+						if (!refresh.tap_touch_up || refresh.refresh_lock) {
+							return;
+						}
+						if (refresh.moveY < 80) {
+							refresh.back();
+						} else {
+							refresh.onRefresh(refresh.$dom);
+							refresh.load();
+						}
+						refresh.moveY = 0;
+					});
+				},
+				onRefresh: function(scroll) { //加载事件-传入为触发事件的jq-dom
+					console.log(scroll);
+				},
+				reinit: function(scroll) { //重置-传入滚动区域选择器-暂未支持
+					//
+				},
+				move: function() {
+					var refresh = this;
+					var opacity;
+					var rotate;
+					refresh.moveY = refresh.moveY < 120 ? refresh.moveY : 120;
+					var n = refresh.moveY / 80;
+					var cr = 450 - 280 * n;
+					var cs = 127.0599695451872 * n;
+					var o = n < 0.75 ? 0.4 : 0.6 * n + 0.4;
+					var sr = -(280 - n * 280) + 100 + 130 * n;
+					refresh.page_refresh.css('-webkit-transform', 'translateY(' + refresh.moveY + 'px)');
+					refresh.svg.css('-webkit-transform', 'rotate(' + sr + 'deg)');
+					if (n > 1) {
+						return;
+					}
+					refresh.circle.attr({
+						'stroke-dasharray': cs + ' 163.36281798666926',
+						'transform': 'rotate(' + cr + ' 30 30)',
+					});
+					refresh.polygon.css('-webkit-transform', 'scale(' + n + ')');
+					refresh.g.css('opacity', o);
+				},
+				load: function() {
+					var refresh = this;
+					refresh.refresh_lock = true;
+					refresh.page_refresh.css({
+						'-webkit-transition': '-webkit-transform 0.3s',
+						'-webkit-transform': 'translateY(80px) scale(1)',
+					});
+					refresh.animate[0].beginElement();
+					refresh.animateTransform[0].beginElement();
+					refresh.animateTransform[1].beginElement();
+					refresh.polygon.css('-webkit-transform', 'scale(0)');
+					setTimeout(function() {
+						refresh.hide();
+					}, refresh.MAXTIME);
+				},
+				back: function() {
+					var refresh = this;
+					var page_refresh = this.page_refresh;
+					page_refresh.one('webkitTransitionEnd', function() {
+						page_refresh.css('-webkit-transition', 'none');
+					}).css({
+						'-webkit-transition': '-webkit-transform 0.3s',
+						'-webkit-transform': 'translateY(0px)',
+					});
+				},
+				hide: function() {
+					var refresh = this;
+					refresh.page_refresh.one('webkitTransitionEnd', function() {
+						refresh.page_refresh.css({
+							'-webkit-transition': 'none',
+							'-webkit-transform': 'scale(1)',
+						});
+						refresh.animate[0].endElement();
+						refresh.animateTransform[0].endElement();
+						refresh.animateTransform[1].endElement();
+						refresh.refresh_lock = false;
+					}).css({
+						'-webkit-transform': 'translateY(80px) scale(0)',
+					});
+				}
+			}
+			refresh.init('#div1');// 初始化-传入滚动父元素
+			refresh.onRefresh = function(iscroll) {//刷新
+				console.log('refresh');
+				console.log(iscroll);
+			}
+		</script>
+	</body>
+
+</html>
